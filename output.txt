@@ -1,0 +1,603 @@
+Directory: data
+File: data/DataProvider.js
+Contents:
+import { useState, useEffect } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../firebase/firebaseConfig";
+import { Platform } from "react-native";
+
+import DataContext from "./data-context";
+
+function DataProvider(props) {
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        await fetch(`https://backend.com`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentUser.accessToken}`,
+          },
+          body: JSON.stringify({
+            id: currentUser.uid,
+            phoneNumber: currentUser.phoneNumber,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            let userProfile = { ...data.user };
+            if (userProfile.reminders === undefined) {
+              userProfile.reminders = [];
+            }
+            if (userProfile.cards === undefined) {
+              userProfile.cards = [];
+            }
+            userProfile.reminders = Object.values(userProfile.reminders);
+            userProfile.cards = Object.values(userProfile.cards);
+            setUserProfile(userProfile);
+            setUser(currentUser);
+            setIsAuthChecked(true);
+            setLoading(false);
+            navigation.navigate("Home");
+          })
+          .catch((error) => {});
+      } else {
+        setIsAuthChecked(true);
+        setUser(null);
+        setUserProfile(null);
+        navigation.navigate("Login");
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+
+  const dataContext = {
+    user: user,
+    setUser: setUser,
+    userProfile: userProfile,
+    setUserProfile: setUserProfile,
+    isAuthChecked: isAuthChecked,
+    loading: loading,
+    setLoading: setLoading,
+  };
+
+  return (
+    <DataContext.Provider value={dataContext}>
+      {props.children}
+    </DataContext.Provider>
+  );
+}
+
+export default DataProvider;
+File: data/data-context.js
+Contents:
+import { createContext } from "react";
+
+const DataContext = createContext({
+  user: null,
+  setUser: () => {},
+  userProfile: null,
+  setUserProfile: () => {},
+  addReminder: () => {},
+  isAuthChecked: null,
+  setSessionId: () => {},
+  deleteReminder: () => {},
+  editReminder: () => {},
+  currentOffering: null,
+  isDataFetched: null,
+  addCard: () => {},
+  deleteCard: () => {},
+  editCard: () => {},
+  loading: null,
+  setLoading: () => {},
+  addToCardCount: () => {},
+});
+
+export default DataContext;
+
+Directory: home
+File: home/Home.js
+Contents:
+import React from 'react';
+import { View, Text } from 'react-native';
+
+const Home = () => {
+  return (
+    <View>
+      <Text>Home</Text>
+    </View>
+  );
+};
+
+export default Home;
+
+
+Directory: loading
+File: loading/LoadingModal.js
+Contents:
+import React from 'react';
+import { View, ActivityIndicator, Modal } from 'react-native';
+import LoadingModalStyles from './LoadingModalStyles';
+
+const LoadingModal = ({ isVisible, onClose }) => {
+  return (
+    <Modal
+      transparent={true}
+      animationType="fade"
+      visible={isVisible}
+      onRequestClose={onClose}
+    >
+      <View style={LoadingModalStyles.upgradePopupOverlay}>
+        <View style={LoadingModalStyles.upgradePopup}>
+          <ActivityIndicator size="large" color="#3f51b5" />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+export default LoadingModal;
+
+File: loading/LoadingModalStyles.js
+Contents:
+import { StyleSheet } from "react-native";
+
+const LoadingModalStyles = StyleSheet.create({
+  upgradePopupOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999,
+  },
+  upgradePopup: {
+    width: "90%",
+    maxWidth: 500,
+    backgroundColor: "white",
+    borderRadius: 4,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  upgradePopupTitle: {
+    fontSize: 24,
+    marginBottom: 20,
+  },
+  closeButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: "transparent",
+    fontSize: 20,
+  },
+  closeButtonText: {
+    color: "#aaa",
+    fontSize: 28,
+    fontWeight: "bold",
+    padding: 5,
+  },
+});
+
+export default LoadingModalStyles;
+
+Directory: modal
+File: modal/ModalPopup.js
+Contents:
+import React from "react";
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  Button,
+  Linking,
+  StyleSheet
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+// import styles from "./ModalStyles";
+
+const ModalPopup = ({
+  isVisible,
+  onClose,
+  title,
+  content,
+  hasButton,
+  navigateHome,
+  openUpgradePopup,
+  hasLinkToSettings,
+}) => {
+  const navigation = useNavigation();
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={isVisible}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalFormContainer}>
+        <View style={styles.modalFormModal}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => {
+              onClose();
+              if (navigateHome) navigation.navigate("Home");
+            }}
+          >
+            <Text style={styles.closeButtonText}>X</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalContent}>{content}</Text>
+          {hasButton && (
+            <Button
+              title="Upgrade"
+              onPress={() => {
+                onClose();
+                openUpgradePopup();
+              }}
+            />
+          )}
+          {hasLinkToSettings && (
+            <Button
+              title="Go to Settings"
+              onPress={() => {
+                onClose();
+                Linking.openSettings();
+              }}
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+
+const styles = StyleSheet.create({
+    modalFormContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "rgba(0, 0, 0, 0.1)",
+      marginTop: -75,
+    },
+    modalFormModal: {
+      backgroundColor: "#fefefe",
+      padding: 25,
+      borderRadius: 10,
+      alignItems: "center",
+      maxWidth: "90%",
+      width: 500,
+      alignSelf: "center",
+    },
+    modalTitle: {
+      fontSize: 24,
+      fontWeight: "bold",
+      marginBottom: 20,
+    },
+    modalContent: {
+      fontSize: 16,
+      marginBottom: 10,
+    },
+    closeButton: {
+      position: "absolute",
+      top: 10,
+      right: 15,
+    },
+    closeButtonText: {
+      color: "#aaa",
+      fontSize: 28,
+      fontWeight: "bold",
+      padding: 5,
+    },
+  });
+
+export default ModalPopup;
+
+Directory: phone
+File: phone/VerifyPhone.js
+Contents:
+import * as React from "react";
+import { Button, TextInput, DefaultTheme } from "react-native-paper";
+import { TouchableOpacity, Text, View } from "react-native";
+
+export default function VerifyPhone({ onVerify, onVerificationRetry }) {
+  const [code, setCode] = React.useState("");
+
+  const theme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: "#3f51b5",
+      underlineColor: "transparent",
+      background: "#00000000",
+    },
+  };
+
+  return (
+    <>
+      <TextInput
+        label="Verification Code"
+        value={code}
+        keyboardType="number-pad"
+        onChangeText={(text) => setCode(text)}
+        style={{ margin: 20 }}
+        theme={theme}
+      />
+      <Button
+        mode="contained"
+        buttonColor="#3f51b5"
+        onPress={() => onVerify(code)}
+        style={{ margin: 20 }}
+      >
+        Verify
+      </Button>
+      <View style={{ margin: 20, alignItems: "center" }}>
+        <TouchableOpacity onPress={onVerificationRetry}>
+          <Text style={{ color: "#3f51b5", textAlign: "center" }}>
+            If you did not get a verification code or entered the wrong phone
+            number, click here
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+}
+File: phone/PhoneAuthStyles.js
+Contents:
+import { StyleSheet } from 'react-native';
+
+const PhoneAuthStyles = StyleSheet.create({
+  loginContainer: {
+    margin: 20,
+    padding: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    elevation: 3,
+  },
+  loginLogo: {
+    width: '100%',
+    height: 150,
+    resizeMode: 'contain',
+    marginBottom: 20,
+  },
+});
+
+export default PhoneAuthStyles;
+
+File: phone/PhoneAuth.js
+Contents:
+import { useRef, useState, useContext, useEffect } from "react";
+import { View, Image, StyleSheet } from "react-native";
+import { Card } from "react-native-paper";
+import { signInWithPhoneNumber } from "@firebase/auth";
+import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
+
+import PhoneSignIn from "./PhoneSignIn";
+import VerifyPhone from "./VerifyPhone";
+import { auth, app } from "../firebase/firebaseConfig";
+import ModalPopup from "../modal/ModalPopup";
+import LoadingModal from "../loading/LoadingModal";
+import DataContext from "../data/data-context";
+import styles from "./PhoneAuthStyles"; 
+
+export default function PhoneAuth() {
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const recaptchaVerifier = useRef(null);
+  const [verificationWrong, setVerificationWrong] = useState(false);
+  const { loading, setLoading } = useContext(DataContext);
+
+  const loginWithPhoneNumber = async (phoneNumber) => {
+    const result = await signInWithPhoneNumber(
+      auth,
+      phoneNumber,
+      recaptchaVerifier.current
+    );
+    setConfirmationResult(result);
+    setIsVerifying(true);
+  };
+  const verifyCode = async (code) => {
+    if (confirmationResult) {
+      try {
+        const userCredential = await confirmationResult.confirm(code);
+        setLoading(true);
+      } catch (error) {
+        setVerificationWrong(true);
+      }
+    } else {
+    }
+  };
+
+  useEffect(() => {
+    console.log("PhoneAuth mounted");
+  }, []);
+
+  return isVerifying ? (
+    <View>
+      <LoadingModal isVisible={loading} onClose={() => setLoading(false)} />
+      <ModalPopup
+        isVisible={verificationWrong}
+        onClose={() => setVerificationWrong(false)}
+        title="Verification Failed"
+        content="The verification code you entered is incorrect. Please try again."
+      />
+      <Card style={styles.loginContainer}>
+        <Image
+          style={styles.loginLogo}
+          source={require("../assets/BirthdayAIBanner.png")}
+        />
+      </Card>
+      <VerifyPhone
+        onVerify={verifyCode}
+        onVerificationRetry={() => {
+          setConfirmationResult(null);
+          setVerificationWrong(false);
+          setIsVerifying(false);
+        }}
+      />
+    </View>
+  ) : (
+    <View>
+        <Card style={styles.loginContainer}>
+        <Image
+          style={styles.loginLogo}
+          source={require("../assets/BirthdayAIBanner.png")}
+        />
+      </Card>
+      <FirebaseRecaptchaVerifierModal
+        ref={recaptchaVerifier}
+        firebaseConfig={app.options}
+      />
+      <PhoneSignIn onPhoneNumberSubmit={loginWithPhoneNumber} />
+    </View>
+  );
+}
+
+
+File: phone/PhoneSignIn.js
+Contents:
+import * as React from "react";
+import { Button, TextInput, DefaultTheme, Text } from "react-native-paper";
+import { Linking } from "react-native";
+
+export default function PhoneSignIn({ onPhoneNumberSubmit }) {
+  const [phoneNumber, setPhoneNumber] = React.useState("");
+  const [validPhoneNumber, setValidPhoneNumber] = React.useState(false);
+
+  const theme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: "#3f51b5",
+      underlineColor: "transparent",
+      background: "#00000000",
+    },
+  };
+
+  const onChangePhoneNumber = (text) => {
+    let cleaned = text.replace(/\D/g, "");
+    let formatted = " ";
+    if (text.length < phoneNumber.length) {
+      if (
+        text.endsWith(" ") ||
+        text.endsWith("-") ||
+        text.endsWith("(") ||
+        text.endsWith(")")
+      ) {
+        setPhoneNumber(text.slice(0, text.length - 1));
+      } else {
+        setPhoneNumber(text);
+      }
+    } else {
+      if (cleaned.length >= 1) formatted += "(";
+      if (cleaned.length >= 1) formatted += cleaned.slice(0, 3);
+      if (cleaned.length >= 3) formatted += ") ";
+      if (cleaned.length >= 4) formatted += cleaned.slice(3, 6);
+      if (cleaned.length >= 6) formatted += "-";
+      if (cleaned.length >= 6) formatted += cleaned.slice(6, 10);
+      setPhoneNumber(formatted);
+    }
+
+    cleaned = formatted.replace(/\D/g, "");
+
+    setValidPhoneNumber(cleaned.length === 10);
+  };
+
+  const handleOpenURL = (url) => {
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+      }
+    });
+  };
+
+  return (
+    <>
+      <TextInput
+        label="Phone Number"
+        value={phoneNumber}
+        keyboardType="phone-pad"
+        onChangeText={onChangePhoneNumber}
+        style={{ margin: 20 }}
+        theme={theme}
+        left={<TextInput.Affix text="+1" />}
+      />
+      <Button
+        mode="contained"
+        disabled={!validPhoneNumber}
+        buttonColor="#3f51b5"
+        onPress={() => {
+          let submittedNumber = "+1" + phoneNumber.replace(/\D/g, "");
+          onPhoneNumberSubmit(submittedNumber);
+        }}
+        style={{ margin: 20 }}
+      >
+        Sign In
+      </Button>
+      <Text style={{ margin: 20, textAlign: "center" }}>
+        By clicking Sign In you are consenting to the{" "}
+        <Text
+          style={{ color: "blue" }}
+          onPress={() =>
+            handleOpenURL(
+              "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+            )
+          }
+        >
+          Terms of Conditions
+        </Text>{" "}
+        and the{" "}
+        <Text
+          style={{ color: "blue" }}
+          onPress={() => handleOpenURL("https://website.com/privacy")}
+        >
+          Privacy Policy
+        </Text>{" "}
+        of BirthdayAI
+      </Text>
+    </>
+  );
+}
+
+Directory: firebase
+File: firebase/firebaseConfig.js
+Contents:
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import "@firebase/auth";
+import '@firebase/auth';
+
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCckUFIHuQR3KbqmcXsTWmgB8_HcDNbOGA",
+    authDomain: "authentication-5c27d.firebaseapp.com",
+    projectId: "authentication-5c27d",
+    storageBucket: "authentication-5c27d.appspot.com",
+    messagingSenderId: "343642812185",
+    appId: "1:343642812185:web:e118db942e6064abf49f88"
+  };
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+export { auth, app };
+
